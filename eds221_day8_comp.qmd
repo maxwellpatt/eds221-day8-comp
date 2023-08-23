@@ -1,0 +1,480 @@
+---
+title: "eds221_day8_comp"
+format: html
+editor: visual
+---
+
+## Review basics of ggplot
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(here)
+library(janitor)
+
+library(patchwork)
+library(ggrepel)
+library(gghighlight)
+library(paletteer)
+library(ggExtra)
+library(ggbeeswarm)
+library(gapminder)
+library(sf)
+```
+
+### Read in the data
+
+```{r}
+lizards <- read_csv(here::here("data_tidy", "lizards.csv"))
+```
+
+Create a new subset from lizards where you:
+
+-   Limit the data to only contain western whiptails, colorado checkered, and eastern fence lizards
+
+-   Add a new column with total length converted to cm
+
+-   Group by species and site
+
+-   Return a summary table with mean total length and st dev of total length
+
+```{r}
+lizards_subset <- lizards %>% 
+  filter(common_name %in% c("western whiptail", "colorado checkered", "eastern fence lizard")) %>% 
+  mutate(length_cm = total_length / 10) %>% 
+  group_by(common_name, site) %>% 
+  summarize(mean_total_lenth = mean(total_length, na.rm = TRUE),
+          sd_total_length = sd(total_length, na.rm = TRUE))
+
+```
+
+```{r}
+# ggplot essential pieces, 3 ways (that do the same thing):
+
+# Like this: 
+ggplot(data = lizards, aes(x = total_length, y = weight, color = common_name)) + # That's 1 & 2
+  geom_point() +# That's 3 
+  facet_wrap(~common_name, scales = "free")
+
+
+# Or, alternatively:
+ggplot(data = lizards) +
+  geom_point(aes(x = total_length, y = weight))
+
+# Or another way:
+ggplot() +
+  geom_point(data = lizards, aes(x = total_length, y = weight))
+```
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_line() # Bad idea, just demonstrating a geom switch.
+```
+
+Keep in mind that some graph types only require one variable - for example, geom_histogram:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length)) +
+  geom_histogram()
+```
+
+And remember to carefully consider the *type* of data you're trying to visualize, which will help to direct the graph type. For example, a jitterplot usually has one categorical variable and one continuous variable:
+
+```{r}
+ggplot(data = lizards, aes(y = common_name, x = weight)) +
+  geom_jitter()
+```
+
+**Not sure which type of graph is appropriate for your data?** My favorite resource is Yan Holtz' [From Data to Viz](https://www.data-to-viz.com/) - check it out, it is fun and amazing, and links to code examples from the [R Graph Gallery](https://www.r-graph-gallery.com/).
+
+### Aesthetic mapping
+
+To change aesthetics of a graph based on a constant (e.g. "Make all the points BLUE"), we can add the information directly to the relevant `geom_` layer. Some things to keep in mind:
+
+-   `fill`: updates fill colors (e.g. column, density, violin, & boxplot interior fill color)
+
+-   `color`: updates point & border line colors (generally)
+
+-   `shape`: update point style
+
+-   `alpha`: update transparency (0 = transparent, 1 = opaque)
+
+-   `size`: point size or line width
+
+-   `linetype`: update the line type (e.g. "dotted", "dashed", "dotdash", etc.)
+
+If you are updating these by referring to a constant value, they **should not be within an `aes()`**.
+
+For example, let's make some nightmares:
+
+```{r}
+ggplot(data = lizards, aes(x = weight)) +
+  geom_histogram(color = "orange", 
+                 fill = "purple", 
+                 size = 2, 
+                 linetype = "dotted")
+```
+
+If you want to map a variable onto a graph aesthetic (e.g., point color should be based on *lizard species*), put it within `aes()`.
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point(aes(color = common_name, size = total_length))
+```
+
+These can be used in combination. For example, if we want the color to be based on species, but the transparency for all points is 0.3:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point(aes(color = common_name), alpha = 0.3)
+```
+
+### Themes
+
+A few useful baselines are:
+
+-   `theme_minimal()`: minimal theme
+
+-   `theme_bw()`: also pretty good for some stuff
+
+-   `theme_light()`: a nice light one
+
+```{r}
+ggplot(data = lizards, aes(x = site, y = weight)) +
+  geom_jitter(aes(color = common_name)) +
+  theme_minimal()
+```
+
+A few useful baselines are:
+
+-   `theme_minimal()`: minimal theme
+
+-   `theme_bw()`: also pretty good for some stuff
+
+-   `theme_light()`: a nice light one
+
+```{r}
+ggplot(data = lizards, aes(x = site, y = weight)) +
+  geom_jitter(aes(color = common_name)) +
+  theme_minimal()
+```
+
+### Axis labels
+
+For basic axis labels, I recommend `labs()`:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point() +
+  labs(x = "Total length (mm)",
+       y = "Weight (grams)",
+       title = "Lizard size")
+```
+
+### Facetting
+
+Sometimes it's useful to split up information in a graph into separate panels. For example, maybe we want to have a separate graph of total length versus weight for *each lizard species*. That would be really tedious to create them all manually from subsets. Instead, we'll facet by distinct groups within a variable.
+
+We'll learn two ways to do this:
+
+-   `facet_wrap()`: the one where you give it one faceting variable and the panels get wrapped into a grid
+
+-   `facet_grid()`: the one where you make a grid based on row & column faceting variables
+
+For example, let's say we just want each species to have its own panel. Then we can use `facet_wrap()`:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point() +
+  facet_wrap(~common_name, ncol = 3, scales = "free")
+```
+
+But what if we want to make a grid where the panels are split across groups by lizard sex and if it has a broken tail or not? Since we have two variables being used to create our grid, we'll use `facet_grid()`:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point() +
+  facet_grid(sex ~ tail)
+```
+
+#### Getting things in order
+
+`ggplot` loves putting things in alphabetical order - but that's rarely the order you actually want things in if you have categorical groups. Let's find some total counts of lizards in the dataset by common name, then make a column graph:
+
+```{r}
+lizard_counts <- lizards %>% 
+  count(common_name)
+
+ggplot(data = lizard_counts, aes(y = fct_reorder(common_name, n), x = n)) +
+  geom_col()
+```
+
+#### Synthesis example
+
+ex1:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point(aes(color = common_name, shape = common_name), 
+             fill = "black",
+             size = 2) +
+  theme_minimal() +
+  labs(x = "Total length (mm)",
+       y = "Weight (g)",
+       color = "Lizard species") +
+  facet_wrap(~common_name, scales = "free")
+```
+
+ex2:
+
+```{r}
+ggplot(data = lizards, aes(y = fct_infreq(common_name))) +
+  geom_bar(aes(fill = site)) +
+  theme_bw() +
+  labs(x = "Lizard counts",
+       y = "Species (common name)") +
+  facet_grid(sex ~ tail)
+```
+
+### Advanced customization
+
+#### Scales
+
+The [`scales`](https://scales.r-lib.org/index.html) package in R is truly an unsung hero of finalizing `ggplot` graphs. To hear more, I strongly recommend watching Dana Seidel's 20 minute talk on [*The little package that could: Taking visualizations to the next level with the scales package*](https://rstudio.com/resources/rstudioconf-2020/the-little-package-that-could-taking-visualizations-to-the-next-level-with-the-scales-package/) from rstudio::conf(2020).
+
+Why does that matter to us? *Because a whole lot of the subtle things that make a graph way better are updating using the scales suite of helpful functions.*
+
+For a complete list of scales functions & usage, see: <https://scales.r-lib.org/index.html>
+
+#### Updating breaks & labels
+
+The important thing: know *what type of variable you have on each axis* so that you know what `scale_` version to call. For example:
+
+-   For dates: `scale_*_date()`
+
+-   For continuous variables: `scale_*_continuous()`
+
+-   For discrete variables: `scale_*_discrete()`
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point() +
+  scale_x_continuous(breaks = c(0, 250, 500), 
+                     limits = c(0, 500)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 70, by = 10), 
+                     limits = c(0, 70)) +
+  theme_light()
+```
+
+But you can also do so much more! For example, you can convert to a log scale:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point() +
+  scale_x_log10()
+```
+
+### Customized aesthetics with `scale_` functions
+
+We've learned to use `scales` functions to update breaks and labels. It is also useful for updating aesthetics, for example to customize color gradients, set size bins, and more.
+
+Again, it is very important to know **what aesthetic you are trying to update.**
+
+For example, is it a **fill** aesthetic you're hoping to customize? Then you might use `scale_fill_*()`. But if it is a **color** aesthetic, you'd use `scale_color_*()` functions. If it is the transparency, then `scale_alpha_*()`. If it is the shape, then `scale_shape_*()`. So make sure you know *which aesthetic you are hoping to change with scales!*
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point(aes(color = weight)) +
+  scale_color_gradient(low = "red", high = "navy")
+```
+
+There are also great options for *binning* colors for a continuous variable, including with the `scale_*_steps()` functions (see more: <https://ggplot2.tidyverse.org/reference/scale_steps.html>). For example, maybe in the graph above we want binned (instead of continuous gradient) color values:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point(aes(color = weight)) +
+  scale_color_steps(low = "red", high = "black")
+```
+
+Or, to make your own bins, try `scale_*_stepsn()`:
+
+```{r}
+ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point(aes(color = weight)) +
+  scale_color_stepsn(colors = c("orange","red","purple"),
+                     breaks = seq(from = 10, to = 60, by = 10))
+```
+
+## In the weeds of themes (gridlines, panel colors)
+
+Ask yourself: do you need those gridlines? Only if your audience needs to know whether values are above or below meaningful values - which can be useful, but oftentimes gridlines are really overused and make an entire plot feel more cluttered.
+
+We can update gridline frequency by changing breaks, but we may want to customize them in other ways, too.
+
+```{r}
+p <- ggplot(data = lizards, aes(x = total_length, y = weight)) +
+  geom_point()
+
+p + 
+  theme(panel.grid = element_blank()) # removes all gridlines (major & minor)
+
+p + 
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(color = "red"))
+```
+
+## Direct annotation and thresholds
+
+Legends are hard for audiences. Aligning values with important thresholds described in a figure captions is hard for audiences. It's not always possible, but depending on your presentation and the audience, consider adding direct annotation and thresholds to plots.
+
+We'll do that with a few little tools:
+
+-   `annotate()`: add annotation manually by location
+
+-   `geom_hline()`: add a horizontal line
+
+-   `geom_vline()`: add a vertical line
+
+```{r}
+p +
+  annotate("text", x = 100, y = 50, label = "COOL!", color = "purple") +
+  annotate("text", x = 400, y = 25, label = "WHOA.", color = "red") +
+  geom_hline(yintercept = 40, linetype = "dotted", color = "blue") +
+  geom_vline(xintercept = 20, linetype = "dashed", color = "green") +
+  theme_minimal()
+```
+
+# Compound figures with `patchwork`
+
+Patchwork makes it easier to put multiple figures together into a single graphic -- and to do some efficient theming while you're at it.
+
+Let's store a couple of different graphs (we already have `p` and `q` stored):
+
+```{r}
+q <- ggplot(data = lizards, aes(x = total_length, y = weight, group = common_name)) +
+  geom_line(aes(color = common_name)) +
+  gghighlight(max(weight, na.rm = TRUE) > 30)
+
+(p | q) & # & means it's applied to both plots! 
+  theme_minimal()
+```
+
+# Explore some new graph types
+
+## Marginal plots
+
+```{r}
+whiptails <- lizards %>% 
+  filter(common_name == "western whiptail") %>% 
+  drop_na(total_length, weight)
+
+# An issue with rug plots: 
+ggplot(data = whiptails, aes(x = total_length, y = weight)) +
+  geom_point() +
+  geom_rug()
+```
+
+## A beeswarm plot with `ggbeeswarm`
+
+```{r}
+ggplot(data = whiptails, aes(x = sex, y = weight)) +
+  geom_beeswarm(size = 1) +
+  geom_boxplot(fill = NA) +
+  scale_x_discrete(labels = c("female","juvenile","male")) +
+  theme_minimal()
+```
+
+## A heatmap with `geom_tile()`
+
+```{r}
+# Get the counts: 
+lizard_counts <- lizards %>% 
+  mutate(date = lubridate::mdy(date)) %>% 
+  count(year = lubridate::year(date), common_name) %>% 
+  drop_na()
+
+# Make a heatmap of counts:
+ggplot(data = lizard_counts, aes(x = year, y = common_name)) +
+  geom_tile(aes(fill = n), show.legend = FALSE) +
+  geom_text(aes(label = n), color = "white", size = 3) +
+  scale_fill_gradientn(colors = c("navy","red","orange")) +
+  theme_minimal() +
+  labs(x = "Year", y = "Lizard common name")
+```
+
+## Make a map!
+
+```{r}
+# First, read in the Jornada Basin vegetation data: 
+jornada_veg <- read_sf(here("data_raw","spatial_vegetation","doc.kml")) %>% dplyr::select(Name) %>% 
+  clean_names()
+
+# Initial exploratory plot (one plot per attribute)
+# plot(jornada_veg)
+
+# Remember, you can see the paletteer palettes with: 
+# View(palettes_c_names)
+# View(palettes_d_names)
+
+ggplot() +
+  geom_sf(data = jornada_veg, 
+          aes(fill = name),
+          color = NA) +
+  theme_minimal() +
+  scale_fill_paletteer_d(palette = "ggthemes::manyeys") +
+  labs(x = "Longitude",
+       y = "Latitude",
+       fill = "Dominant vegetation:",
+       title = "Jornada Basin vegetation",
+       caption = "Data source: Jornada Basin LTER") +
+  theme(legend.position = "right",
+        plot.title.position = "plot",
+        plot.caption.position = "plot",
+        plot.caption = element_text(face = "italic", color = "gray30"),
+        axis.text = element_text(size = 5))
+```
+
+### AFTERNOON
+
+```{r}
+ggplot(data = gapminder, aes(x = lifeExp, y = gdpPercap)) +
+  geom_point() +
+  annotate("text", x = 40, y = 90000, label = "A LABEL!") +
+  geom_hline(yintercept = 70000, linetype = "dotted", color = "purple") +
+  geom_vline(xintercept = mean(gapminder$lifeExp))
+```
+
+```{r}
+gapminder %>% 
+  filter(continent == "Europe", year == 2002) %>% 
+  ggplot(aes(x = gdpPercap, y = lifeExp)) +
+  geom_point() + 
+  #geom_text_repel(aes(label = country)) +
+  gghighlight(country == "Poland", label_key = country)
+```
+
+Create a ggplot chart using data only from 2007, then highlight all countries in Europe, adding their country name as the label
+
+```{r}
+gapminder %>% 
+  filter(year == 2007) %>% 
+  ggplot(aes(x = gdpPercap, y = lifeExp)) +
+  geom_point() +
+  geom_text_repel(aes(label = country))
+  gghighlight(continent == "Europe")
+```
+
+```{r}
+jornada_veg <- read_sf(here::here("data_raw", "spatial_vegetation", "doc.kml")) %>% 
+  select(name = Name) # can use select to rename stuff, or relocate, etc
+
+ggplot() + 
+  geom_sf(data = jornada_veg, aes(fill = name), color = NA) +
+  theme_minimal() +
+  scale_fill_paletteer_d(palette = "ggthemes::manyeys") +
+  theme(panel.background = element_rect(color = "purple", size = 5, fill = "pink"), plot.background = element_rect(fill = "magenta"),
+        panel.grid = element_line(color = "red"),
+        panel.grid.major = element_line(color = "green"),
+        axis.text.x = element_text(color = "red"))
+  
+```
